@@ -1,0 +1,40 @@
+name: verify-zenodo-package
+on:
+  workflow_dispatch:
+    inputs:
+      record:
+        description: "Zenodo record id (e.g. 23452754)"
+        required: true
+      zipname:
+        description: "zip file name in the record (e.g. release_circ_gross.zip)"
+        required: true
+      mode:
+        description: "verify.sh mode"
+        required: false
+        default: "light"
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y build-essential
+          pip install --quiet numpy scipy numba stim python-flint mpmath
+      - name: Download package from Zenodo
+        run: |
+          curl -sSL -o pkg.zip "https://zenodo.org/records/${{ inputs.record }}/files/${{ inputs.zipname }}?download=1"
+          sha256sum pkg.zip
+          unzip -q pkg.zip -d pkg
+      - name: Run verify.sh
+        run: |
+          cd pkg/*/
+          bash verify.sh ${{ inputs.mode }} 2>&1 | tee ../../verify.log
+          tail -3 ../../verify.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verify-log-${{ inputs.record }}
+          path: verify.log
